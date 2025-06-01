@@ -1,0 +1,4 @@
+# airflow/requirements_airflow.txt
+apache-airflow-providers-postgres
+apache-airflow-providers-apache-kafka
+kafka-python>=2.0.0

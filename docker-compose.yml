@@ -1,0 +1,189 @@
+# Tidak ada 'version' di sini
+
+x-airflow-common: &airflow-common
+  image: my-custom-airflow:latest 
+  build:
+    context: ./airflow
+    dockerfile: Dockerfile
+  env_file:
+    - ./airflow/airflow.env
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/plugins:/opt/airflow/plugins
+  networks:
+    - app_network
+  # depends_on diatur per layanan spesifik di bawah
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - app_network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka
+    ports:
+      - "9092:9092" 
+      - "29092:29092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    networks:
+      - app_network
+
+  postgres_app_db:
+    image: postgres:15
+    container_name: postgres_app_db
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppassword
+      POSTGRES_DB: user_data_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres_app_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app_network
+    healthcheck: # Tambahkan healthcheck untuk postgres_app_db
+      test: ["CMD-SHELL", "pg_isready -U appuser -d user_data_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  producer_app:
+    build: ./producer
+    container_name: producer_app
+    depends_on:
+      kafka:
+        condition: service_started # Cukup service_started, karena producer punya retry logic
+    networks:
+      - app_network
+    restart: on-failure
+
+  consumer_validator_app:
+    build: ./consumer_validator
+    container_name: consumer_validator_app
+    depends_on:
+      kafka:
+        condition: service_started 
+    networks:
+      - app_network
+    restart: on-failure
+
+  website_backend_app:
+    build: ./website_backend
+    container_name: website_backend_app
+    ports:
+      - "5000:5000"
+    depends_on:
+      kafka:
+        condition: service_started
+    networks:
+      - app_network
+    restart: on-failure
+
+  # === LAYANAN AIRFLOW ===
+  postgres_airflow_db:
+    image: postgres:15
+    container_name: postgres_airflow_db
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow_db
+    ports:
+      - "5433:5432" 
+    volumes:
+      - ./postgres_airflow_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+    healthcheck: # Tambahkan healthcheck agar layanan lain menunggu DB ini siap
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow-init: # LAYANAN BARU UNTUK INISIALISASI DB AIRFLOW
+    <<: *airflow-common
+    container_name: airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        set -e;
+        echo "Attempting to run airflow db upgrade...";
+        airflow db upgrade;
+        echo "airflow db upgrade completed.";
+        echo "Attempting to create admin user (will not fail if user already exists)...";
+        airflow users create \
+          --username admin \
+          --password admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com || true; 
+        echo "Admin user creation/check completed.";
+    depends_on:
+      postgres_airflow_db: # Pastikan DB Postgres untuk Airflow sudah sehat dulu
+        condition: service_healthy
+    # restart: on-failure # Seharusnya berhasil sekali, jika gagal ada masalah fundamental
+    # Tidak perlu restart: 'no' atau biarkan default, karena ini one-shot job
+
+  airflow_webserver:
+    <<: *airflow-common
+    container_name: airflow_webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck: 
+      test: ["CMD-SHELL", "curl --fail http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s # Kurangi timeout sedikit
+      retries: 5
+    depends_on:
+      airflow-init: # Tunggu airflow-init selesai dengan sukses
+        condition: service_completed_successfully 
+        # Jika service_completed_successfully tidak didukung versi Docker Compose Anda,
+        # Anda bisa coba hapus condition, tapi timing bisa jadi masalah.
+        # Atau, gunakan 'service_started' dan berharap init cepat.
+        # Namun, `service_completed_successfully` adalah yang paling tepat.
+
+  airflow_scheduler:
+    <<: *airflow-common
+    container_name: airflow_scheduler
+    command: scheduler
+    healthcheck: 
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname $$(hostname) || exit 1"]
+      interval: 30s
+      timeout: 10s # Kurangi timeout sedikit
+      retries: 5
+    depends_on:
+      airflow-init: # Tunggu airflow-init selesai dengan sukses
+        condition: service_completed_successfully
+        # Sama seperti webserver untuk condition
+
+volumes:
+  postgres_app_data:
+  postgres_airflow_data:
+
+networks:
+  app_network:
+    driver: bridge

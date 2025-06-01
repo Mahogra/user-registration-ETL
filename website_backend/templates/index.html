@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time User Greetings</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        #greeting-container { max-width: 600px; margin: auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #007bff; }
+        #greetings-list { list-style-type: none; padding: 0; max-height: 200px; /* Sesuaikan tinggi jika perlu */ overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px; min-height: 50px; }
+        #greetings-list li { background-color: #e9ecef; margin-bottom: 8px; padding: 10px; border-radius: 4px; animation: fadeIn 0.5s ease-in-out; }
+        #status { text-align: center; margin-top: 15px; font-style: italic; color: #666; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div id="greeting-container">
+        <h1>Sapaan Pengguna Real-time</h1>
+        <ul id="greetings-list"></ul>
+        <div id="status">Menghubungkan ke server...</div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const socket = io.connect(window.location.protocol + '//' + window.location.hostname + (window.location.port ? (':' + window.location.port) : ''), {
+                // Opsi tambahan untuk mencoba menstabilkan koneksi (eksperimental)
+                // transports: ['websocket'], // Hanya gunakan WebSocket, hindari fallback ke polling
+                // reconnectionAttempts: 5,
+                // reconnectionDelay: 3000
+            });
+            
+            const greetingsList = document.getElementById('greetings-list');
+            const statusDiv = document.getElementById('status');
+            const maxMessages = 5; // <<< BATASAN 5 PESAN
+
+            socket.onAny((eventName, ...args) => {
+                console.log(`[Frontend DEBUG] Event APA PUN diterima: Nama Event='${eventName}' -- Data:`, args);
+            });
+
+            socket.on('connect', () => {
+                statusDiv.textContent = 'Terhubung ke server real-time!';
+                statusDiv.style.color = 'green';
+                console.log('[Frontend] Terhubung ke server WebSocket. Session ID: ' + socket.id);
+            });
+
+            socket.on('disconnect', (reason) => { 
+                statusDiv.textContent = 'Koneksi terputus. Mencoba menghubungkan kembali...';
+                statusDiv.style.color = 'red';
+                console.warn('[Frontend] Terputus dari server WebSocket. Alasan:', reason);
+                // Jika alasan 'io server disconnect', klien akan otomatis mencoba reconnect jika 'reconnection' tidak di-disable.
+            });
+
+            socket.on('connection_ack', (data) => { 
+                console.log('[Frontend] Pesan dari server (connection_ack):', data.message);
+            });
+
+            socket.on('new_user_greeting', (data) => {
+                console.log('[Frontend] Event "new_user_greeting" SPESIFIK diterima:', data); 
+                
+                if (data && data.message && typeof data.message === 'string') { 
+                    console.log('[Frontend] Data "new_user_greeting" valid, akan membuat elemen list.'); 
+                    const newItem = document.createElement('li');
+                    newItem.textContent = data.message;
+                    
+                    greetingsList.insertBefore(newItem, greetingsList.firstChild);
+                    console.log('[Frontend] Elemen list telah ditambahkan ke DOM untuk "new_user_greeting".'); 
+
+                    while (greetingsList.children.length > maxMessages) {
+                        greetingsList.removeChild(greetingsList.lastChild);
+                    }
+                } else {
+                    console.warn('[Frontend] Menerima event "new_user_greeting" tetapi format data tidak sesuai atau data.message kosong/bukan string:', data);
+                }
+            });
+
+            socket.on('connect_error', (error) => {
+                statusDiv.textContent = 'Gagal terhubung ke server. Periksa konsol untuk detail.';
+                statusDiv.style.color = 'red';
+                console.error('[Frontend] Error koneksi WebSocket:', error);
+            });
+        });
+    </script>
+</body>
+</html>

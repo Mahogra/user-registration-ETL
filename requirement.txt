@@ -1,0 +1,10 @@
+requests
+kafka-python
+psycopg2-binary
+Flask
+Flask-SocketIO
+eventlet
+# Jika Anda menjalankan Airflow di environment yang sama, tambahkan:
+# apache-airflow
+# apache-airflow-providers-postgres
+# apache-airflow-providers-apache-kafka
