@@ -18,9 +18,37 @@ Proyek ini dirancang untuk menunjukkan pemahaman konsep streaming data real-time
 * Seluruh aplikasi dijalankan dalam lingkungan Docker yang terisolasi dan mudah direplikasi menggunakan Docker Compose.
 * Monitoring pipeline ETL melalui UI Airflow.
 
-
-
-
+## Direktori Projek
+```
+user-registration-ETL
+├── docker-compose.yml
+├── producer/
+│   ├── Dockerfile
+│   ├── producer.py
+│   └── requirements.txt
+├── consumer_validator/
+│   ├── Dockerfile
+│   ├── consumer_validator.py
+│   └── requirements.txt
+├── website_backend/
+│   ├── Dockerfile
+│   ├── app_realtime_website.py
+│   ├── templates/
+│   │   └── index.html
+│   └── requirements.txt
+├── airflow/
+│   ├── Dockerfile
+│   ├── dags/
+│   │   └── user_etl_dag.py
+│   ├── logs/                   # Dibuat oleh Docker saat runtime
+│   ├── plugins/                # Kosongkan jika tidak ada plugin custom         
+│   └── airflow.env.example     # Contoh file environment untuk Airflow, untuk dijalankan maka edit agar menjadi airflow.env
+│   └── requirements_airflow.txt
+├── postgres_app_data/          # Dibuat oleh Docker (volume untuk data aplikasi)
+├── postgres_airflow_data/      # Dibuat oleh Docker (volume untuk metadata Airflow)
+├── schema.sql
+└── README.md
+```
 ## Alur Kerja Data
 
 1.  **Producer (`producer.py`)**: Mengambil data dari API `randomuser.me` setiap 10 detik dan mengirimkannya ke topik Kafka `randomuser-topic`.
