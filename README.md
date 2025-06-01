@@ -18,9 +18,7 @@ Proyek ini dirancang untuk menunjukkan pemahaman konsep streaming data real-time
 * Seluruh aplikasi dijalankan dalam lingkungan Docker yang terisolasi dan mudah direplikasi menggunakan Docker Compose.
 * Monitoring pipeline ETL melalui UI Airflow.
 
-## Arsitektur Proyek
 
-Berikut adalah representasi alur kerja dan komponen utama:
 
 
 ## Alur Kerja Data
@@ -43,7 +41,6 @@ Berikut adalah representasi alur kerja dan komponen utama:
 * **Frontend Website**: HTML, JavaScript, Socket.IO Client
 * **Kontainerisasi**: Docker, Docker Compose
 * **Library Python Utama**: `kafka-python`, `requests`, `psycopg2-binary` (via provider Airflow)
-
 
 ## Prasyarat
 
