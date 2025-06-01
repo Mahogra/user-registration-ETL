@@ -90,7 +90,6 @@ user-registration-ETL
         ```
     * Buka file `airflow/airflow.env` dengan editor teks.
     * Ganti placeholder `GANTI_DENGAN_KUNCI_RAHASIA_PANJANG_DAN_ACAK_ANDA` untuk `AIRFLOW__WEBSERVER__SECRET_KEY` dengan kunci acak yang kuat dan unik buatan Anda sendiri. Anda bisa menggunakan generator password online atau perintah seperti `openssl rand -hex 32` (jika tersedia) untuk membuatnya.
-        **Contoh Kunci (JANGAN GUNAKAN INI, BUAT SENDIRI!)**: `mySuperSecretRandomKeyForAirflowWebserver12345!`
 
 3.  **Build dan Jalankan Semua Layanan dengan Docker Compose**:
     Dari direktori root proyek, jalankan:
